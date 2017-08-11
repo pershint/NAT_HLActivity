@@ -1,0 +1,18 @@
+REM Simple job to save data every 2 hours, for up to 20 hours
+REM Use: Replace the DESCRIBE_SAMPLE with your own,
+REM and change the location after SAVE to wheverever you want
+REM Note that the ??? becomes 0,1,2,3,4,... (it's the loop variable)
+REM and that the files will be auto-saved every 1000 seconds (ish)
+
+SET_DETECTOR 1
+SET_PRESET_CLEAR
+LOOP 10
+CLEAR
+SET_PRESET_LIVE 43200
+START
+WAIT
+STOP
+DESCRIBE_SAMPLE "SNO+ NAA Background Run, Autosaves"
+SAVE "SNO+_NAA_Background_07062014_???.CHN"
+SAVE "SNO+_NAA_Background_07062014_???.SPE"
+END_LOOP
