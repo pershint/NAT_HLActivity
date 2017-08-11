@@ -29,16 +29,16 @@ def main():
 
     # First, initialize your data structure with all desired data file
     # and background file locations
-    datastruct = ds.datacollection(listofdatafiles, listofbkgfiles)
+    alldatafiles = ds.datacollection(listofdatafiles, listofbkgfiles)
 
     # Load the current list of data files into data to be analyzed
-    datastruct.load_datafiles()
-    datastruct.load_bkgdatafiles()
+    alldatafiles.load_datafiles()
+    alldatafiles.load_bkgdatafiles()
 
     #FIXME: If DEBUG, show the spectra in the data
 
     #Now, initialize the analysis class with our data and isotope database
-    hl_analyzer = an.halflife(datatoanalyze=datastruct)
+    hl_analyzer = an.halflife(datatoanalyze=alldatafiles)
 
     #Run will try to calculate the half-life of the selected peak two ways:
     #1) Exponential fit of peak height in all spectra
