@@ -191,9 +191,9 @@ class halflife(object):
         #Define the graph class. Is a basic matplotlib.pyplot wrapper.
         #feed in peak info for each data set
         print("STARTING GRAPH STUFF")
-        gr=mf.graph(np.array(pdd["starttimes"]), \
+        gr=mf.graph((np.array(pdd["starttimes"])+(np.array(pdd["counttimes"])/2.)), \
                 bksub_rates)
-        gr.adderrorbars(np.array(pdd["starttimes"]), bksub_rates, \
+        gr.adderrorbars((np.array(pdd["starttimes"])+(np.array(pdd["counttimes"])/2.)), bksub_rates, \
                 bksub_rates_unc)
         gr.settitle("Total signal counts observed in peak in each counting run")
         gr.setlabels("Time since start of first count data (seconds)", \
