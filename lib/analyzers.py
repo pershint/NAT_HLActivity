@@ -125,11 +125,11 @@ class halflife(object):
                 xmax=np.where(x>xright)[0][0] #arr index of point just above xright
                 hpw=len(x[xmin:xmax])/2 #Mid-point of peak
                 plot=1
-            totcounts=sum(y[xmin:xmax]) #Total counts in peak regoin
+            totcounts=float(sum(y[xmin:xmax])) #Total counts in peak regoin
             #The activity needs to be corrected to account
             #for dead time during the counting run.
-            deadtime_scaler = float(dfile.deadtime)
-            scaled_counts.append(totcounts * deadtime_scaler)
+            deadtime_scaler = float(1. - float(dfile.deadtime))
+            scaled_counts.append(totcounts / deadtime_scaler)
             #Calculate bakground rate of peak
             if self.usebkgdata is True:
                 #FIXME: Calculate background expected using the background
@@ -146,14 +146,14 @@ class halflife(object):
                 bgr=sum(y[xmax:xmax+hpw])
                 bg=bgl+bgr
                 bkg = (bg * deadtime_scaler)
-            bkg_counts.append(bkg)
+            bkg_counts.append(float(bkg))
         #Times are all given in reference to the last epoch. Let's
         #Scale the start times such that the first run starts at t=0
         tmin=min(starttimes)
         ttimes=[]
         for v in starttimes:
             s=v-tmin
-            ttimes.append(s)
+            ttimes.append(float(s))
         #We have everything we want for the peak info. now.
         #sort everything by time
         unsorted_peakdata=zip(ttimes, scaled_counts, bkg_counts, \
@@ -178,16 +178,16 @@ class halflife(object):
         print('Half-life results from exponential fit of scaled activities:')
         #initialize function we will fit to
         exponential_decay = lambda p, x: p[0]*np.exp(-x*p[1])
-        p0=[20.,float(1./42.)]   #Initial guess at counts and decay constant
-        function_to_fit = mf.function(exponential_decay, p0, np.min(pdd["starttimes"]), \
-        np.max(pdd["starttimes"]))
-        print('Initial fit parameters: ' + str(function_to_fit.p0))
-        print(pdd)
         bksub_rates = (np.array(pdd["scaled_counts"]) - \
                 np.array(pdd["bkg_counts"]))/ np.array(pdd["counttimes"])
         print("AT UNC.")
         bksub_rates_unc = np.sqrt(np.array(pdd["scaled_counts"]) + \
                 np.array(pdd["bkg_counts"])) / np.array(pdd["counttimes"])
+        p0=[np.average(bksub_rates),float(1./42000.)]   #Initial guess at counts and decay constant
+        function_to_fit = mf.function(exponential_decay, p0, np.min(pdd["starttimes"]), \
+        np.max(pdd["starttimes"]))
+        print('Initial fit parameters: ' + str(function_to_fit.p0))
+        print(pdd)
         #Define the graph class. Is a basic matplotlib.pyplot wrapper.
         #feed in peak info for each data set
         print("STARTING GRAPH STUFF")
