@@ -197,7 +197,7 @@ class halflife(object):
                 bksub_rates_unc)
         gr.settitle("Total signal counts observed in peak in each counting run")
         gr.setlabels("Time since start of first count data (seconds)", \
-                "Background-subracted counts in peak region")
+                "Background-subracted count rate in peak region")
         #Use the fit method to fit the "fitter" mf.function to the data
         bestfit, covariance = gr.fit(function_to_fit)
         function_to_fit.draw_fit() #Draws best fit result found in gr.fit
