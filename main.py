@@ -32,6 +32,7 @@ def main():
 
     # Load the current list of data files into data to be analyzed
     alldatafiles.load_datafiles()
+    #Loads in bkg files for use. Uncomment to calculate bkgs w/ peak sidebands
     alldatafiles.load_bkgdatafiles()
 
     #FIXME: If DEBUG, show the spectra in the data

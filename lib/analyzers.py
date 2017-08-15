@@ -78,6 +78,26 @@ class halflife(object):
             plt.set_ylabel('Counts')
             plt.show()
 
+    def __calc_scaledbkg_counts(self, bkgdatafile_arr, counttime, peakrange):
+        '''
+        Given some time interval, returns the background counts expected
+        in that time interval for the given peak range.
+        '''
+        #FIXME: I should calculate the error on the bkg measurement here.
+        #Currently, I'm overestimating errors on the bkg.
+        timecorrected_bkgcounts = []
+        for bfile in bkgdatafile_arr:
+            x,y=bfile.x, bfile.y
+            bkg_counts=sum(y[peakrange[0]:peakrange[1]])
+            print("BKG COUNTS FOR RUN: " + str(bkg_counts))
+            print("LEN OF BKG RUN: " + str(bfile.tstop - bfile.tstart))
+            bkg_timecorr = float(bkg_counts) * (float(counttime)/float(bfile.tstop - bfile.tstart))
+            print("TIMECORR BKG: " + str(bkg_timecorr))
+            timecorrected_bkgcounts.append(bkg_timecorr)
+        #Now, average your background values
+        bcounts = np.average(np.array(timecorrected_bkgcounts))
+        return bcounts
+
 
     def __peakchooser(self, datafile):
         '''
@@ -101,7 +121,7 @@ class halflife(object):
         self.current_peakdata = []
         return xleft, xright
     
-    def get_onepeakinfo(self, datafile_arr, bkddatafile_arr=None):
+    def get_onepeakinfo(self, datafile_arr, bkgdatafile_arr=None):
         '''
         Function takes in a datacollection class object and returns
         the start time, total counts, total counts scaled for if
@@ -115,8 +135,9 @@ class halflife(object):
         deadtimes=[] #Total fraction of time the HPGe was dead while
                      #collecting data
         plot=0
-        for dfile in datafile_arr:
-            counttimes.append(float(dfile.tstop-dfile.tstart))
+        for dfile in datafile_arr: #Loop overy every data file for peak info
+            counttime = float(dfile.tstop-dfile.tstart)
+            counttimes.append(counttime)
             starttimes.append(float(dfile.tstart))
             x,y=dfile.x,dfile.y
             if plot==0:
@@ -132,15 +153,8 @@ class halflife(object):
             scaled_counts.append(totcounts / deadtime_scaler)
             #Calculate bakground rate of peak
             if self.usebkgdata is True:
-                #FIXME: Calculate background expected using the background
-                #Files fed in.  Take the total counts in the file and scale
-                #them to the time taken for this dfile.
-                print("This feature not yet supported.  Defaulting to using"+\
-                        "Sideband of peak for background count")
-                bgl=sum(y[xmin-hpw:xmin]) #Backgrounds calculated from left and right sides of peak
-                bgr=sum(y[xmax:xmax+hpw])
-                bg=bgl+bgr
-                bkg = (bg * deadtime_scaler)
+                bkg = self.__calc_scaledbkg_counts(bkgdatafile_arr, \
+                        counttime, [xmin,xmax])
             else:
                 bgl=sum(y[xmin-hpw:xmin]) #Backgrounds calculated from left and right sides of peak
                 bgr=sum(y[xmax:xmax+hpw])

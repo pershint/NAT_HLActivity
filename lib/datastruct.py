@@ -30,7 +30,7 @@ class datacollection:
 
     #load in all datafiles named in self.bkgfilenames
     def load_bkgdatafiles(self):
-        for filename in self.datafilenames:
+        for filename in self.bkgfilenames:
             try:
                 self.openbkgfiles.append(datafile(filename))
             except (NameError, FileNotFoundError, OSError) as er:
@@ -38,7 +38,7 @@ class datacollection:
                 continue
 
     def get_bkgdatafile(self, filename):
-        for j, name in enumerate(self.datafilenames):
+        for j, name in enumerate(self.bkgfilenames):
             if filename == name:
                 return self.openbkgdatafiles[j]
         print("Filename not found in currently loaded data collection.")
