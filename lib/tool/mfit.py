@@ -5,6 +5,7 @@
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import seaborn as sns
 import math
 from scipy.optimize import leastsq
 import scipy.special as sp
@@ -22,23 +23,23 @@ class graph:
         ''' 
         self.x, self.y = np.array(x), np.array(y)
         self.xmin, self.xmax = 0, len(self.x)
-        self.errbar_colors = 'r'
+        self.errbar_colors = 'g'
         self.data_colors = 'g'
 
     def adderrorbars(self, xloc, yloc, errbar_widths):
         plt.errorbar(xloc, yloc, yerr= errbar_widths, \
-                color=self.errbar_colors, fmt='o')
+                color=self.errbar_colors, linewidth=2,fmt='o')
 
     def settitle(self, title):
-        plt.title(str(title))
+        plt.title(str(title),fontsize=34)
 
     def setlabels(self, xlabel, ylabel):
-        plt.xlabel(str(xlabel))
-        plt.ylabel(str(ylabel))
+        plt.xlabel(str(xlabel),fontsize=20)
+        plt.ylabel(str(ylabel),fontsize=20)
 
-    def draw(self):
-        plt.plot(self.x, self.y, 'o', color=self.data_colors)
-
+    def draw_data(self):
+        plt.plot(self.x, self.y, 'o', color=self.data_colors,label='data')
+    
     def bounds(self, xmin, xmax):
         self.xmin = np.where(self.x>=xmin)[0][0]
         self.xmax = np.where(self.x<=xmax)[0][-1]
@@ -59,7 +60,9 @@ class graph:
         return fitout[0], fitout[1] #best parameter fits, covariance
 
     def show(self):
+        sns.set_style("whitegrid")
         plt.ioff()
+        plt.legend(loc=3) 
         plt.show()
 
 #Class acts as a container for a lambda function, initial paramters associated
@@ -70,6 +73,11 @@ class function:
         self.xmin, self.xmax = xmin, xmax
         self.func = func
         self.pfit = None #fills after fitting funcion to data in the graph class
+    
+    def draw_fit(self, step_size=0.1):
+        steps = (self.xmax-self.xmin)/step_size
+        x=np.linspace(self.xmin, self.xmax, steps)
+        plt.plot(x, self.func(self.pfit, x),color='k',linewidth=3,label='exp_fit')
 
     def bounds(self, xmin, xmax):
         self.xmin = xmin
@@ -77,11 +85,6 @@ class function:
 
     def residual(self):
         return lambda p, x, y: ( y - self.func(p, x) )
-
-    def draw_fit(self, step_size=0.1):
-        steps = (self.xmax-self.xmin)/step_size
-        x=np.linspace(self.xmin, self.xmax, steps)
-        plt.plot(x, self.func(self.pfit, x))
 
     def evaluate(self, x):
         return self.func(self.p0, x)

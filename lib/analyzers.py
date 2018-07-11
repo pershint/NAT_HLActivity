@@ -15,9 +15,10 @@ import operator
 import time
 
 from .tool import mfit as mf
-
+from .tool import funclib as fl
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 class halflife(object):
     '''
@@ -71,6 +72,10 @@ class halflife(object):
             Shows the plot of the HPGe spectrum for the input datafile.
             '''
             x,y = dfile.x, dfile.y
+            sns.set_style("whitegrid")
+            xkcd_colors = ['black','purple']
+            sns.set_palette(sns.xkcd_palette(xkcd_colors))
+
             plt.ion()
             plt.plot(x,y, alpha=0.8, color='r')
             plt.title('Spectrum for file: ' + str(datafile.name))
@@ -105,11 +110,15 @@ class halflife(object):
         user to choose a peak region of interest.  The lower and
         upper energy of the peak region are returned.
         '''
-
+        sns.set_style("whitegrid")
+        xkcd_colors = ['slate blue']
+        sns.set_palette(sns.xkcd_palette(xkcd_colors))
         plt.ion()
         x,y=datafile.x,datafile.y
         plt.plot(x,y) #Uses first file for user to choose peak of interest
-        plt.title('Find your peak region, then close.')
+        plt.xlabel("Energy (keV)",fontsize=20)
+        plt.ylabel("Counts",fontsize=20)
+        plt.title('Find your peak region, then close.',fontsize=30)
         plt.show()
         goodbounds = False
         while not goodbounds:
@@ -191,7 +200,7 @@ class halflife(object):
         '''
         print('Half-life results from exponential fit of scaled activities:')
         #initialize function we will fit to
-        exponential_decay = lambda p, x: p[0]*np.exp(-x*p[1])
+        exponential_decay=fl.exponential_decay
         bksub_rates = (np.array(pdd["scaled_counts"]) - \
                 np.array(pdd["bkg_counts"]))/ np.array(pdd["counttimes"])
         print("AT UNC.")
@@ -209,9 +218,9 @@ class halflife(object):
                 bksub_rates)
         gr.adderrorbars((np.array(pdd["starttimes"])+(np.array(pdd["counttimes"])/2.)), bksub_rates, \
                 bksub_rates_unc)
-        gr.settitle("Total signal counts observed in peak in each counting run")
+        gr.settitle("Total signal counts observed\n in peak in each counting run")
         gr.setlabels("Time since start of first count data (seconds)", \
-                "Background-subracted count rate in peak region")
+                "Background-subracted count rate\n in peak region")
         #Use the fit method to fit the "fitter" mf.function to the data
         bestfit, covariance = gr.fit(function_to_fit)
         function_to_fit.draw_fit() #Draws best fit result found in gr.fit
@@ -221,7 +230,7 @@ class halflife(object):
         halfl=hlt(decay_constant_fit)
         print('Fitted CPM at start of first data:' + str(initial_count_fit))
         print('Fitted half-life (in hours): ' + str(halfl/3600.))
-        gr.draw() #Adds graph data to current draw space
+        gr.draw_data() #Adds graph data to current draw space
         gr.show() #Shows current draw space
 	
     def hl_countpairs(self, pdd):
