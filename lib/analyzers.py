@@ -55,7 +55,7 @@ class halflife(object):
         #self.hl_countpairs(peakdata_dict)
 
 ###Functions used by the half-life calculator
-    def __inputvalid(self, xl, xr):
+    def _inputvalid(self, xl, xr):
         '''
         Make sure the user didn't pick any silly bounds for half-life
         calculating.
@@ -83,10 +83,11 @@ class halflife(object):
             plt.set_ylabel('Counts')
             plt.show()
 
-    def __calc_scaledbkg_counts(self, bkgdatafile_arr, counttime, peakrange):
+    def _calc_deadtcorrcounts(self, bkgdatafile_arr, counttime, peakrange):
         '''
-        Given some time interval, returns the background counts expected
-        in that time interval for the given peak range.
+        Given some time interval, the detector was only able to see counts when not
+        acquiring data (dead time).  Returns the background counts expected
+        if the detector had no dead time for the given peak range.
         '''
         #FIXME: I should calculate the error on the bkg measurement here.
         #Currently, I'm overestimating errors on the bkg.
@@ -94,17 +95,14 @@ class halflife(object):
         for bfile in bkgdatafile_arr:
             x,y=bfile.x, bfile.y
             bkg_counts=sum(y[peakrange[0]:peakrange[1]])
-            print("BKG COUNTS FOR RUN: " + str(bkg_counts))
-            print("LEN OF BKG RUN: " + str(bfile.tstop - bfile.tstart))
-            bkg_timecorr = float(bkg_counts) * (float(counttime)/float(bfile.tstop - bfile.tstart))
-            print("TIMECORR BKG: " + str(bkg_timecorr))
-            timecorrected_bkgcounts.append(bkg_timecorr)
+            timecorr = float(bkg_counts) * (float(counttime)/float(bfile.tstop - bfile.tstart))
+            timecorrected_bkgcounts.append(timecorr)
         #Now, average your background values
         bcounts = np.average(np.array(timecorrected_bkgcounts))
         return bcounts
 
 
-    def __peakchooser(self, datafile):
+    def _peakchooser(self, datafile):
         '''
         Takes in the first datafile, plots the spectrum, and allows the
         user to choose a peak region of interest.  The lower and
@@ -124,7 +122,7 @@ class halflife(object):
         while not goodbounds:
             xleft=float(input('Leftmost edge of peak (keV):'))
             xright=float(input('Rightmost edge of right peak (keV):'))
-            if self.__inputvalid(xleft, xright):
+            if self._inputvalid(xleft, xright):
                 goodbounds = True
                 plt.close()
         self.current_peakdata = []
@@ -133,12 +131,12 @@ class halflife(object):
     def get_onepeakinfo(self, datafile_arr, bkgdatafile_arr=None):
         '''
         Function takes in a datacollection class object and returns
-        the start time, total counts, total counts scaled for if
+        the start time, total counts, total counts deadtcorr for if
         there was no dead time, and the total counting time taken
         for a peak region input by the user.
         '''
-        scaled_counts=[] #Counts with a correction for deadtime
-        bkg_counts=[]
+        deadtcorr_bkgcnts=[] #Counts with a correction for deadtime
+        counts=[]
         starttimes=[] #Start time of each datafile
         counttimes=[] #Total count time of each datafile
         deadtimes=[] #Total fraction of time the HPGe was dead while
@@ -150,7 +148,7 @@ class halflife(object):
             starttimes.append(float(dfile.tstart))
             x,y=dfile.x,dfile.y
             if plot==0:
-                xleft, xright = self.__peakchooser(dfile)
+                xleft, xright = self._peakchooser(dfile)
                 xmin=np.where(x<xleft)[0][-1] #array index of point just below xleft
                 xmax=np.where(x>xright)[0][0] #arr index of point just above xright
                 hpw=len(x[xmin:xmax])/2 #Mid-point of peak
@@ -159,17 +157,17 @@ class halflife(object):
             #The activity needs to be corrected to account
             #for dead time during the counting run.
             deadtime_scaler = float(1. - float(dfile.deadtime))
-            scaled_counts.append(totcounts / deadtime_scaler)
+            deadtcorr_bkgcnts.append(totcounts / deadtime_scaler)
             #Calculate bakground rate of peak
             if self.usebkgdata is True:
-                bkg = self.__calc_scaledbkg_counts(bkgdatafile_arr, \
+                bkg = self._calc_deadtcorrcounts(bkgdatafile_arr, \
                         counttime, [xmin,xmax])
             else:
                 bgl=sum(y[xmin-hpw:xmin]) #Backgrounds calculated from left and right sides of peak
                 bgr=sum(y[xmax:xmax+hpw])
                 bg=bgl+bgr
                 bkg = (bg * deadtime_scaler)
-            bkg_counts.append(float(bkg))
+            counts.append(float(bkg))
         #Times are all given in reference to the last epoch. Let's
         #Scale the start times such that the first run starts at t=0
         tmin=min(starttimes)
@@ -179,15 +177,15 @@ class halflife(object):
             ttimes.append(float(s))
         #We have everything we want for the peak info. now.
         #sort everything by time
-        unsorted_peakdata=zip(ttimes, scaled_counts, bkg_counts, \
+        unsorted_peakdata=zip(ttimes, deadtcorr_bkgcnts, counts, \
                 counttimes, starttimes)
         sorted_peakdata=sorted(unsorted_peakdata, \
                 key = lambda t: t[0])#Organize peak areas chronologically
         #Now take the details of each peak and re-organize into a dictionary
         peakdata_dict = {"peak_energy_range": [xleft,xright], 
                 "starttimes": [i[0] for i in sorted_peakdata], \
-                "scaled_counts": [i[1] for i in sorted_peakdata], \
-                "bkg_counts":[i[2] for i in sorted_peakdata],\
+                "deadtcorr_bkgcnts": [i[1] for i in sorted_peakdata], \
+                "counts":[i[2] for i in sorted_peakdata],\
                 "counttimes": [i[3] for i in sorted_peakdata]}
         self.current_peakdata = peakdata_dict
         return peakdata_dict
@@ -198,14 +196,14 @@ class halflife(object):
         selected peak region count data using an exponential fit.
         pdd = peakdata_dict output by self.choosepeak
         '''
-        print('Half-life results from exponential fit of scaled activities:')
+        print('Half-life results from exponential fit of deadtcorr activities:')
         #initialize function we will fit to
         exponential_decay=fl.exponential_decay
-        bksub_rates = (np.array(pdd["scaled_counts"]) - \
-                np.array(pdd["bkg_counts"]))/ np.array(pdd["counttimes"])
+        bksub_rates = (np.array(pdd["deadtcorr_bkgcnts"]) - \
+                np.array(pdd["counts"]))/ np.array(pdd["counttimes"])
         print("AT UNC.")
-        bksub_rates_unc = np.sqrt(np.array(pdd["scaled_counts"]) + \
-                np.array(pdd["bkg_counts"])) / np.array(pdd["counttimes"])
+        bksub_rates_unc = np.sqrt(np.array(pdd["deadtcorr_bkgcnts"]) + \
+                np.array(pdd["counts"])) / np.array(pdd["counttimes"])
         p0=[np.average(bksub_rates),float(1./42000.)]   #Initial guess at counts and decay constant
         function_to_fit = mf.function(exponential_decay, p0, np.min(pdd["starttimes"]), \
         np.max(pdd["starttimes"]))
@@ -214,23 +212,32 @@ class halflife(object):
         #Define the graph class. Is a basic matplotlib.pyplot wrapper.
         #feed in peak info for each data set
         print("STARTING GRAPH STUFF")
-        gr=mf.graph((np.array(pdd["starttimes"])+(np.array(pdd["counttimes"])/2.)), \
-                bksub_rates)
-        gr.adderrorbars((np.array(pdd["starttimes"])+(np.array(pdd["counttimes"])/2.)), bksub_rates, \
-                bksub_rates_unc)
+        gr=mf.graph(x=(np.array(pdd["starttimes"])+(np.array(pdd["counttimes"])/2.)), \
+                y=bksub_rates,yerr=bksub_rates_unc)
+        gr.draw_data()
         gr.settitle("Total signal counts observed\n in peak in each counting run")
         gr.setlabels("Time since start of first count data (seconds)", \
                 "Background-subracted count rate\n in peak region")
+        
         #Use the fit method to fit the "fitter" mf.function to the data
         bestfit, covariance = gr.fit(function_to_fit)
         function_to_fit.draw_fit() #Draws best fit result found in gr.fit
+        
+        #Display the fit results
         initial_count_fit=bestfit[0]
         decay_constant_fit=bestfit[1]
+        #residual_fit = bestfit[2]
         hlt=lambda x: (1./x)*np.log(2.)
+        hltunc = lambda x,xunc: (float(xunc)/float(x**2))*np.log(2.) 
         halfl=hlt(decay_constant_fit)
+        halflunc = hltunc(decay_constant_fit, np.sqrt(np.diag(covariance))[1])
         print('Fitted CPM at start of first data:' + str(initial_count_fit))
         print('Fitted half-life (in hours): ' + str(halfl/3600.))
-        gr.draw_data() #Adds graph data to current draw space
+        #print('Fitted const. offset (CPM): ' + str(str(bestfit[2]))) 
+        print('Covariance matrix for fitted parameters: ' + str(covariance))
+        print('Standard error of initial CPM fitted: ' + str(np.sqrt(np.diag(covariance))[0]))
+        print('Standard error of half-life: ' + str(halflunc/3600.))
+        #print('Std. error on const. offset: ' + str(np.sqrt(np.diag(covariance))[2]))
         gr.show() #Shows current draw space
 	
     def hl_countpairs(self, pdd):
@@ -252,11 +259,11 @@ class halflife(object):
                 ti2=pdd["starttimes"][p]
                 tf2=pdd["starttimes"][p]+pdd["counttimes"][p]
                 afun= lambda x, y, z: 1/(np.exp(-x*y)-np.exp(-x*z))
-                bksub_rates = (np.array(pdd["scaled_counts"]) - \
-                        np.array(pdd["bkg_counts"]))/ \
+                bksub_rates = (np.array(pdd["deadtcorr_bkgcnts"]) - \
+                        np.array(pdd["counts"]))/ \
                         np.array(pdd["counttimes"])
-                coeff = lambda x: np.exp(x*(ti1-ti2)) * (bkg_subrates[k]/ \
-                        bkg_subrates[p])
+                coeff = lambda x: np.exp(x*(ti1-ti2)) * (subrates[k]/ \
+                        subrates[p])
                 #fsolve: solve for x assuming the function given = 0
                 lamb=float(fsolve(lambda x: coeff(x) * afun(x, ti1, tf1)-afun(x, ti2, tf2),1e-5))  #Starting point chosen arbitrarily
                 hl=((1/lamb)*np.log(2)/3600) #Converted to hrs
