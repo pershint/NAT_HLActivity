@@ -217,7 +217,7 @@ class halflife(object):
         gr.draw_data()
         gr.settitle("Total signal counts observed\n in peak in each counting run")
         gr.setlabels("Time since start of first count data (seconds)", \
-                "Background-subracted count rate\n in peak region")
+                "Background-subracted counts per second \n in peak region")
         
         #Use the fit method to fit the "fitter" mf.function to the data
         bestfit, covariance = gr.fit(function_to_fit)
@@ -231,11 +231,11 @@ class halflife(object):
         hltunc = lambda x,xunc: (float(xunc)/float(x**2))*np.log(2.) 
         halfl=hlt(decay_constant_fit)
         halflunc = hltunc(decay_constant_fit, np.sqrt(np.diag(covariance))[1])
-        print('Fitted CPM at start of first data:' + str(initial_count_fit))
+        print('Fitted CPS at start of first data:' + str(initial_count_fit))
         print('Fitted half-life (in hours): ' + str(halfl/3600.))
         #print('Fitted const. offset (CPM): ' + str(str(bestfit[2]))) 
         print('Covariance matrix for fitted parameters: ' + str(covariance))
-        print('Standard error of initial CPM fitted: ' + str(np.sqrt(np.diag(covariance))[0]))
+        print('Standard error of initial CPS fitted: ' + str(np.sqrt(np.diag(covariance))[0]))
         print('Standard error of half-life: ' + str(halflunc/3600.))
         #print('Std. error on const. offset: ' + str(np.sqrt(np.diag(covariance))[2]))
         gr.show() #Shows current draw space
