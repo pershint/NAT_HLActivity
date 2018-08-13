@@ -5,10 +5,12 @@
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import seaborn as sns
+import lib.argparser as p
 import math
 import scipy.optimize as scp
 import scipy.special as sp
+if p.USESEABORN is True:
+    import seaborn as sns
 
 #Wrapper for matplotlib.pyplot with some pre-defined color and plot schemes
 class graph:
@@ -64,7 +66,8 @@ class graph:
         return popt, pcov #best parameter fits, covariance
 
     def show(self):
-        sns.set_style("whitegrid")
+        if p.USESEABORN is True:
+            sns.set_style("whitegrid")
         plt.ioff()
         plt.legend(loc=3) 
         plt.show()

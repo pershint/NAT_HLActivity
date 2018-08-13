@@ -89,4 +89,4 @@ class datafile:
         self.nfo = self.data['info'].tolist()
         self.tstart = self.data['starttime']
         self.tstop = self.tstart + self.data['totaltime']
-        self.deadtime = self.data['livetime']/self.data['totaltime']
+        self.livefraction = float(self.data['livetime'])/float(self.data['totaltime'])

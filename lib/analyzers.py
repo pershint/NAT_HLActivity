@@ -13,12 +13,13 @@ from scipy.optimize import fsolve
 from os import listdir
 import operator
 import time
-
+from . import argparser as p
 from .tool import mfit as mf
 from .tool import funclib as fl
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
+if p.USESEABORN is True:
+	import seaborn as sns
 
 class halflife(object):
     '''
@@ -72,9 +73,10 @@ class halflife(object):
             Shows the plot of the HPGe spectrum for the input datafile.
             '''
             x,y = dfile.x, dfile.y
-            sns.set_style("whitegrid")
-            xkcd_colors = ['black','purple']
-            sns.set_palette(sns.xkcd_palette(xkcd_colors))
+            if p.USESEABORN is True:
+                sns.set_style("whitegrid")
+                xkcd_colors = ['black','purple']
+                sns.set_palette(sns.xkcd_palette(xkcd_colors))
 
             plt.ion()
             plt.plot(x,y, alpha=0.8, color='r')
@@ -94,7 +96,7 @@ class halflife(object):
         timecorrected_bkgcounts = []
         for bfile in bkgdatafile_arr:
             x,y=bfile.x, bfile.y
-            bkg_counts=sum(y[peakrange[0]:peakrange[1]])
+            bkg_counts=np.sum(y[peakrange[0]:peakrange[1]])
             timecorr = float(bkg_counts) * (float(counttime)/float(bfile.tstop - bfile.tstart))
             timecorrected_bkgcounts.append(timecorr)
         #Now, average your background values
@@ -108,9 +110,10 @@ class halflife(object):
         user to choose a peak region of interest.  The lower and
         upper energy of the peak region are returned.
         '''
-        sns.set_style("whitegrid")
-        xkcd_colors = ['slate blue']
-        sns.set_palette(sns.xkcd_palette(xkcd_colors))
+        if p.USESEABORN is True:
+            sns.set_style("whitegrid")
+            xkcd_colors = ['slate blue']
+            sns.set_palette(sns.xkcd_palette(xkcd_colors))
         plt.ion()
         x,y=datafile.x,datafile.y
         plt.plot(x,y) #Uses first file for user to choose peak of interest
@@ -135,8 +138,8 @@ class halflife(object):
         there was no dead time, and the total counting time taken
         for a peak region input by the user.
         '''
-        deadtcorr_bkgcnts=[] #Counts with a correction for deadtime
-        counts=[]
+        deadtcorr_totcnts=[] #Counts with a correction for deadtime
+        bkgcounts=[]
         starttimes=[] #Start time of each datafile
         counttimes=[] #Total count time of each datafile
         deadtimes=[] #Total fraction of time the HPGe was dead while
@@ -153,21 +156,21 @@ class halflife(object):
                 xmax=np.where(x>xright)[0][0] #arr index of point just above xright
                 hpw=len(x[xmin:xmax])/2 #Mid-point of peak
                 plot=1
-            totcounts=float(sum(y[xmin:xmax])) #Total counts in peak regoin
+            totcounts=float(np.sum(y[xmin:xmax])) #Total counts in peak regoin
             #The activity needs to be corrected to account
             #for dead time during the counting run.
-            deadtime_scaler = float(1. - float(dfile.deadtime))
-            deadtcorr_bkgcnts.append(totcounts / deadtime_scaler)
+            deadtime_scaler = float(dfile.livefraction) 
+            deadtcorr_totcnts.append(totcounts *  deadtime_scaler)
             #Calculate bakground rate of peak
             if self.usebkgdata is True:
                 bkg = self._calc_deadtcorrcounts(bkgdatafile_arr, \
                         counttime, [xmin,xmax])
             else:
-                bgl=sum(y[xmin-hpw:xmin]) #Backgrounds calculated from left and right sides of peak
-                bgr=sum(y[xmax:xmax+hpw])
+                bgl=sum(y[(xmin-hpw):xmin]) #Backgrounds calculated from left and right sides of peak
+                bgr=sum(y[xmax:(xmax+hpw)])
                 bg=bgl+bgr
                 bkg = (bg * deadtime_scaler)
-            counts.append(float(bkg))
+            bkgcounts.append(float(bkg))
         #Times are all given in reference to the last epoch. Let's
         #Scale the start times such that the first run starts at t=0
         tmin=min(starttimes)
@@ -177,15 +180,15 @@ class halflife(object):
             ttimes.append(float(s))
         #We have everything we want for the peak info. now.
         #sort everything by time
-        unsorted_peakdata=zip(ttimes, deadtcorr_bkgcnts, counts, \
+        unsorted_peakdata=zip(ttimes, deadtcorr_totcnts, bkgcounts, \
                 counttimes, starttimes)
         sorted_peakdata=sorted(unsorted_peakdata, \
                 key = lambda t: t[0])#Organize peak areas chronologically
         #Now take the details of each peak and re-organize into a dictionary
         peakdata_dict = {"peak_energy_range": [xleft,xright], 
                 "starttimes": [i[0] for i in sorted_peakdata], \
-                "deadtcorr_bkgcnts": [i[1] for i in sorted_peakdata], \
-                "counts":[i[2] for i in sorted_peakdata],\
+                "deadtcorr_totcnts": [i[1] for i in sorted_peakdata], \
+                "bkgcounts":[i[2] for i in sorted_peakdata],\
                 "counttimes": [i[3] for i in sorted_peakdata]}
         self.current_peakdata = peakdata_dict
         return peakdata_dict
@@ -199,11 +202,11 @@ class halflife(object):
         print('Half-life results from exponential fit of deadtcorr activities:')
         #initialize function we will fit to
         exponential_decay=fl.exponential_decay
-        bksub_rates = (np.array(pdd["deadtcorr_bkgcnts"]) - \
-                np.array(pdd["counts"]))/ np.array(pdd["counttimes"])
+        bksub_rates = (np.array(pdd["deadtcorr_totcnts"]) - \
+                np.array(pdd["bkgcounts"]))/ np.array(pdd["counttimes"])
         print("AT UNC.")
-        bksub_rates_unc = np.sqrt(np.array(pdd["deadtcorr_bkgcnts"]) + \
-                np.array(pdd["counts"])) / np.array(pdd["counttimes"])
+        bksub_rates_unc = np.sqrt(np.array(pdd["deadtcorr_totcnts"]) + \
+                np.array(pdd["bkgcounts"])) / np.array(pdd["counttimes"])
         p0=[np.average(bksub_rates),float(1./42000.)]   #Initial guess at counts and decay constant
         function_to_fit = mf.function(exponential_decay, p0, np.min(pdd["starttimes"]), \
         np.max(pdd["starttimes"]))

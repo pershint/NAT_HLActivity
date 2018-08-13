@@ -1,16 +1,12 @@
 # Example of how to use the half-life class to analyze data
 import os, sys
-import argparse
+import lib.argparser as p
 import lib.datastruct as ds
 import lib.analyzers as an
 import glob
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--debug", action="store_true",default="False", \
-        help="Print out more information and plots")
-args = parser.parse_args()
 
-DEBUG = args.debug
+DEBUG = p.DEBUG
 
 #Define your experiment data and background counting data file locations
 MAINDIR = os.path.dirname(__file__)
