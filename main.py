@@ -14,7 +14,7 @@ DEBUG = args.debug
 
 #Define your experiment data and background counting data file locations
 MAINDIR = os.path.dirname(__file__)
-DATADIR = os.path.abspath(os.path.join(MAINDIR, "data", "ThoriatedLAB_TealsSpike"))
+DATADIR = os.path.abspath(os.path.join(MAINDIR, "data", "ThoriatedLAB_Teal_2017"))
 BKGDATADIR = os.path.abspath(os.path.join(MAINDIR, "data","NAT2017_Backgrounds"))
 
 def main():
