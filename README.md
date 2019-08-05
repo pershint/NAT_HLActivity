@@ -65,13 +65,3 @@ the background subtracted counts for each file and plots them as a function of
 time (t=0 is set for the file with the earliest start time).  Finally, an
 exponential is fit to the points to find the best fit decay constant.
 
-lib/tool/mfit.py: Containes two classes.  
-
-The function class that holds a
-1D lambda function along with some constants like the function range and
-initial function parameters.  Also contains a draw function to plot the
-function over a graph class.
-
-The graph class is essentially a matplotlib.pyplot wrapper for graphing 1D
-data.  When a function class is fed into the fit method, the input function
-is fit to the data contained in the graph class.  

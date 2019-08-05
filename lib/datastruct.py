@@ -85,8 +85,7 @@ class datafile:
         self.tstart, self.tstop, and self.deadtime
         '''
         self.data = np.load(self.name)
-        self.x, self.y = self.data['x'], self.data['y']
-        self.nfo = self.data['info'].tolist()
+        self.energy, self.counts = self.data['energy'], self.data['counts']
         self.tstart = self.data['starttime']
         self.tstop = self.tstart + self.data['totaltime']
         self.livefraction = float(self.data['livetime'])/float(self.data['totaltime'])

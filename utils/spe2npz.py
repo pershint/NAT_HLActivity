@@ -10,9 +10,9 @@ def convert(files):
     files = [ v for v in files[:] if v.endswith(spe) ]
     for f in files:
         info = grab_info(f)
-        x, y = make_data_not_suck(info)
+        energy, counts = make_data_not_suck(info)
         livetime, totaltime, starttime = make_info_not_suck(info)
-        np.savez(f.split(spe)[0], info=info, x=x, y=y, livetime=livetime,
+        np.savez(f.split(spe)[0], energy=energy, counts=counts, livetime=livetime,
                  totaltime=totaltime, starttime=starttime)
         print('wrote:', f.split(spe)[0])
 
@@ -42,7 +42,7 @@ def make_info_not_suck(webster):
 
     start_time_str = webster['DATE_MEA:']
     print(start_time_str)
-    strtime = start_time_str.split('\r\n')[0]
+    strtime = start_time_str.split('\n')[0]
     timestruct = time.strptime(strtime, '%m/%d/%Y %H:%M:%S')
     starttime = time.mktime(timestruct)
     return livetime, totaltime, starttime
@@ -51,7 +51,7 @@ def make_data_not_suck(webster):
     # First line of data is the data range
     data_str = webster['DATA:']
     del(webster['DATA:'])
-    data = data_str.split('\r\n')
+    data = data_str.split('\n')
     e_range = [ int(v) for v in data[0].split(' ') if v != '' ]
     # Remove that first data point
     data = data[1:]

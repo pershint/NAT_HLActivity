@@ -9,17 +9,15 @@
 #   Half-lives found for each peak using both methods            #
 
 import sys
+import scipy.optimize as scp
 from scipy.optimize import fsolve
 from os import listdir
 import operator
 import time
-from . import argparser as p
-from .tool import mfit as mf
-from .tool import funclib as fl
+from . import funclib as fl
 import numpy as np
 import matplotlib.pyplot as plt
-if p.USESEABORN is True:
-	import seaborn as sns
+import seaborn as sns
 
 class halflife(object):
     '''
@@ -29,28 +27,21 @@ class halflife(object):
     region selected by the user
     '''
 
-    def __init__(self, datatoanalyze=None):
+    def __init__(self):
         self.name = 'halflife'
         self.usebkgdata = False
-        self.fill_datatoanalyze(datatoanalyze)
-        self.current_peakdata = []
+        self.current_peakdata = {}
+        self.peak_left = None
+        self.peak_right = None
 
-    def clear_datatoanalyze(self):
-        self.datatoanalyze = None
-        self.usebkgdata = False
 
-    def fill_datatoanalyze(self,datatoanalyze):
-        self.datatoanalyze = datatoanalyze
-        if self.datatoanalyze.openbkgfiles: #True if bkg data files are loaded
-            self.usebkgdata = True
-
-    def run(self):
+    def run_analysis(self,datacollection):
         '''
         Default is to calculate the half life using an exponential fit to
         count data of one peak.
         '''
-        peakdata_dict=self.get_onepeakinfo(self.datatoanalyze.opendatafiles, \
-                self.datatoanalyze.openbkgfiles)
+        peakdata_dict=self.analyze_peak(datacollection.opendatafiles, \
+                datacollection.openbkgfiles)
         self.hl_expfit(peakdata_dict)
         #uncomment to calculate half-life using pairs of peak data
         #self.hl_countpairs(peakdata_dict)
@@ -68,15 +59,14 @@ class halflife(object):
             inputokay = False
         return inputokay
 
-    def showSpectrum(self, datafile):
+    def show_spectrum(self, datafile):
             '''
             Shows the plot of the HPGe spectrum for the input datafile.
             '''
             x,y = dfile.x, dfile.y
-            if p.USESEABORN is True:
-                sns.set_style("whitegrid")
-                xkcd_colors = ['black','purple']
-                sns.set_palette(sns.xkcd_palette(xkcd_colors))
+            sns.set_style("whitegrid")
+            xkcd_colors = ['black','purple']
+            sns.set_palette(sns.xkcd_palette(xkcd_colors))
 
             plt.ion()
             plt.plot(x,y, alpha=0.8, color='r')
@@ -95,7 +85,7 @@ class halflife(object):
         #Currently, I'm overestimating errors on the bkg.
         timecorrected_bkgcounts = []
         for bfile in bkgdatafile_arr:
-            x,y=bfile.x, bfile.y
+            x,y=bfile.energy, bfile.counts
             bkg_counts=np.sum(y[peakrange[0]:peakrange[1]])
             timecorr = float(bkg_counts) * (float(counttime)/float(bfile.tstop - bfile.tstart))
             timecorrected_bkgcounts.append(timecorr)
@@ -103,59 +93,64 @@ class halflife(object):
         bcounts = np.average(np.array(timecorrected_bkgcounts))
         return bcounts
 
-
-    def _peakchooser(self, datafile):
+    def choose_peak(self,xleft,xright):
         '''
-        Takes in the first datafile, plots the spectrum, and allows the
-        user to choose a peak region of interest.  The lower and
-        upper energy of the peak region are returned.
+        Inputs choose the peak region to perform the analysis over.
         '''
-        if p.USESEABORN is True:
-            sns.set_style("whitegrid")
-            xkcd_colors = ['slate blue']
-            sns.set_palette(sns.xkcd_palette(xkcd_colors))
+        if not self._inputvalid(xleft, xright):
+            print("Input left and right bins are not valid.  Please give valid entries.")
+            return
+        self.peak_left = xleft
+        self.peak_right = xright
+    
+    def show_stackplot(self, opendatafiles,x_range=None):
+        '''
+        Loops through all data in the datacollection class and plots the x,y
+        data for all datafiles.
+        '''
+        sns.set_style("whitegrid")
+        sns.set_context("poster")
+        fig=plt.figure(figsize=(20,20))
         plt.ion()
-        x,y=datafile.x,datafile.y
-        plt.plot(x,y) #Uses first file for user to choose peak of interest
+        for dfile in opendatafiles: #Loop overy every data file for peak info
+            x,y=dfile.energy,dfile.counts
+            plt.plot(x,y) #Uses first file for user to choose peak of interest
         plt.xlabel("Energy (keV)",fontsize=20)
         plt.ylabel("Counts",fontsize=20)
-        plt.title('Find your peak region, then close.',fontsize=30)
+        plt.title('Stack plot of all data in data collection.',fontsize=30)
+        if x_range is not None:
+            plt.xlim(x_range[0],x_range[1])
         plt.show()
-        goodbounds = False
-        while not goodbounds:
-            xleft=float(input('Leftmost edge of peak (keV):'))
-            xright=float(input('Rightmost edge of right peak (keV):'))
-            if self._inputvalid(xleft, xright):
-                goodbounds = True
-                plt.close()
-        self.current_peakdata = []
-        return xleft, xright
     
-    def get_onepeakinfo(self, datafile_arr, bkgdatafile_arr=None):
+    def analyze_peak(self, datafile_arr, bkgdatafile_arr=None):
         '''
         Function takes in a datacollection class object and returns
         the start time, total counts, total counts deadtcorr for if
         there was no dead time, and the total counting time taken
         for a peak region input by the user.
         '''
+        if self.peak_left is None or self.peak_right is None:
+            print("Please choose your peak bounds prior to running.")
+            return
         deadtcorr_totcnts=[] #Counts with a correction for deadtime
         bkgcounts=[]
         starttimes=[] #Start time of each datafile
         counttimes=[] #Total count time of each datafile
         deadtimes=[] #Total fraction of time the HPGe was dead while
                      #collecting data
-        plot=0
+        have_peakmid = False
         for dfile in datafile_arr: #Loop overy every data file for peak info
             counttime = float(dfile.tstop-dfile.tstart)
             counttimes.append(counttime)
             starttimes.append(float(dfile.tstart))
-            x,y=dfile.x,dfile.y
-            if plot==0:
-                xleft, xright = self._peakchooser(dfile)
-                xmin=np.where(x<xleft)[0][-1] #array index of point just below xleft
-                xmax=np.where(x>xright)[0][0] #arr index of point just above xright
-                hpw=len(x[xmin:xmax])/2 #Mid-point of peak
-                plot=1
+            x,y=dfile.energy,dfile.counts
+            if not have_peakmid:
+                xleft=self.peak_left
+                xright=self.peak_right
+                xmin=np.where(x<self.peak_left)[0][-1] #array index of point just below xleft
+                xmax=np.where(x>self.peak_right)[0][0] #arr index of point just above xright
+                hpw=int(len(x[xmin:xmax])/2) #Mid-point of peak
+                have_peakmid=True
             totcounts=float(np.sum(y[xmin:xmax])) #Total counts in peak regoin
             #The activity needs to be corrected to account
             #for dead time during the counting run.
@@ -193,55 +188,73 @@ class halflife(object):
         self.current_peakdata = peakdata_dict
         return peakdata_dict
 
-    def hl_expfit(self, pdd):
+    def peakcounts_vstime(self, pdd):
+        '''
+        Plots the integral of peak counts with background subtraction included. 
+        '''
+        bksub_rates = (np.array(pdd["deadtcorr_totcnts"]) - \
+                np.array(pdd["bkgcounts"]))/ np.array(pdd["counttimes"])
+        bksub_rates_unc = np.sqrt(np.array(pdd["deadtcorr_totcnts"]) + \
+                np.array(pdd["bkgcounts"])) / np.array(pdd["counttimes"])
+        plt.errorbar(x=(np.array(pdd["starttimes"])+(np.array(pdd["counttimes"])/2.)), \
+                y=bksub_rates,yerr=bksub_rates_unc, marker='o', 
+                    linestyle='none',color='g', 
+                    linewidth=2, label='data')
+        plt.title("Total signal counts observed\n in peak in each counting run")
+        plt.xlabel("Time since start of first count data (seconds)")
+        plt.ylabel("Background-subracted counts per second \n in peak region")
+        plt.show() #Shows current draw space
+
+    def hl_expfit(self, pdd, fitrange = None):
         '''
         Calculates the half life of the isotope associated with the
         selected peak region count data using an exponential fit.
         pdd = peakdata_dict output by self.choosepeak
         '''
         print('Half-life results from exponential fit of deadtcorr activities:')
-        #initialize function we will fit to
-        exponential_decay=fl.exponential_decay
         bksub_rates = (np.array(pdd["deadtcorr_totcnts"]) - \
                 np.array(pdd["bkgcounts"]))/ np.array(pdd["counttimes"])
-        print("AT UNC.")
         bksub_rates_unc = np.sqrt(np.array(pdd["deadtcorr_totcnts"]) + \
                 np.array(pdd["bkgcounts"])) / np.array(pdd["counttimes"])
+        timebins = (np.array(pdd["starttimes"])+(np.array(pdd["counttimes"])/2.))
+        plt.errorbar(x=timebins, \
+                y=bksub_rates,yerr=bksub_rates_unc, marker='o', 
+                    linestyle='none',color='g', 
+                    linewidth=2, label='data')
+        plt.title("Total signal counts observed\n in peak in each counting run")
+        plt.xlabel("Time since start of first count data (seconds)")
+        plt.ylabel("Background-subracted counts per second \n in peak region")
+        
+        #Now, perform the fit across the entire range 
+        fit_function=fl.exponential_decay
+        xmin = 0 
+        xmax = len(timebins) - 1
+        if fitrange is not None:
+            xmin, xmax = np.where(timebins>=fitrange[0])[0][0], np.where(timebins<=fitrange[1])[0][-1]
         p0=[np.average(bksub_rates),float(1./42000.)]   #Initial guess at counts and decay constant
-        function_to_fit = mf.function(exponential_decay, p0, np.min(pdd["starttimes"]), \
-        np.max(pdd["starttimes"]))
-        print('Initial fit parameters: ' + str(function_to_fit.p0))
-        print(pdd)
-        #Define the graph class. Is a basic matplotlib.pyplot wrapper.
-        #feed in peak info for each data set
-        print("STARTING GRAPH STUFF")
-        gr=mf.graph(x=(np.array(pdd["starttimes"])+(np.array(pdd["counttimes"])/2.)), \
-                y=bksub_rates,yerr=bksub_rates_unc)
-        gr.draw_data()
-        gr.settitle("Total signal counts observed\n in peak in each counting run")
-        gr.setlabels("Time since start of first count data (seconds)", \
-                "Background-subracted counts per second \n in peak region")
-        
-        #Use the fit method to fit the "fitter" mf.function to the data
-        bestfit, covariance = gr.fit(function_to_fit)
-        function_to_fit.draw_fit() #Draws best fit result found in gr.fit
-        
+        xr = timebins[xmin:(xmax+1)]
+        yr = bksub_rates[xmin:(xmax+1)]
+        yu = bksub_rates_unc[xmin:(xmax+1)]
+        popt, pcov = scp.curve_fit(fit_function, xr, yr, p0=p0, sigma=yu)
+        step_size = 0.1
+        steps = (timebins[xmax]-timebins[xmin])/step_size
+        fit_x=np.linspace(timebins[xmin], timebins[xmax], steps)
+        plt.plot(fit_x, fit_function(fit_x, popt[0], popt[1]),color='k',linewidth=3,label='exp_fit')
+        plt.show()
         #Display the fit results
-        initial_count_fit=bestfit[0]
-        decay_constant_fit=bestfit[1]
+        initial_count_fit=popt[0]
+        decay_constant_fit=popt[1]
         #residual_fit = bestfit[2]
         hlt=lambda x: (1./x)*np.log(2.)
         hltunc = lambda x,xunc: (float(xunc)/float(x**2))*np.log(2.) 
         halfl=hlt(decay_constant_fit)
-        halflunc = hltunc(decay_constant_fit, np.sqrt(np.diag(covariance))[1])
+        halflunc = hltunc(decay_constant_fit, np.sqrt(np.diag(pcov))[1])
         print('Fitted CPS at start of first data:' + str(initial_count_fit))
         print('Fitted half-life (in hours): ' + str(halfl/3600.))
         #print('Fitted const. offset (CPM): ' + str(str(bestfit[2]))) 
-        print('Covariance matrix for fitted parameters: ' + str(covariance))
-        print('Standard error of initial CPS fitted: ' + str(np.sqrt(np.diag(covariance))[0]))
+        print('Covariance matrix for fitted parameters: ' + str(pcov))
+        print('Standard error of initial CPS fitted: ' + str(np.sqrt(np.diag(pcov))[0]))
         print('Standard error of half-life: ' + str(halflunc/3600.))
-        #print('Std. error on const. offset: ' + str(np.sqrt(np.diag(covariance))[2]))
-        gr.show() #Shows current draw space
 	
     def hl_countpairs(self, pdd):
         '''
